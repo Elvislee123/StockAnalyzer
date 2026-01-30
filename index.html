@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>2-Stock RAG Screener (Alpha Vantage)</title>
+  <style>
+    :root {
+      /* One-colour site (monochrome). R/A/G badges keep their signalling colours. */
+      --bg: #0b0f14;
+      --panel: #0b0f14;
+      --card: #0b0f14;
+      --text: #e5e7eb;
+      --muted: rgba(229,231,235,0.72);
+      --muted2: rgba(229,231,235,0.55);
+      --border: rgba(229,231,235,0.14);
+
+      --green: #16a34a;
+      --amber: #f59e0b;
+      --red: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      max-width: 1200px;
+      margin: 18px auto 0;
+      padding: 0 16px;
+      display: flex;
+      gap: 14px;
+      align-items: baseline;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+
+    h1 { font-size: 18px; margin: 0; letter-spacing: 0.2px; }
+    .muted { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .muted.small { font-size: 12px; color: var(--muted2); }
+
+    .container {
+      max-width: 1200px;
+      margin: 14px auto 24px;
+      padding: 0 16px;
+    }
+
+    .columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .col {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      background: var(--panel);
+      min-height: calc(100vh - 170px);
+    }
+
+    .topbar {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 10px;
+    }
+
+    .left {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+
+    label { font-size: 12px; color: var(--muted2); }
+
+    input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      outline: none;
+      font-size: 14px;
+      width: 180px;
+      text-transform: uppercase;
+    }
+
+    button {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 750;
+      letter-spacing: 0.1px;
+    }
+
+    button:hover { border-color: rgba(229,231,235,0.24); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .status { margin: 10px 0 0; font-size: 12px; color: var(--muted2); min-height: 18px; }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      margin-top: 12px;
+      background: var(--card);
+    }
+
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .ticker { font-size: 18px; font-weight: 850; letter-spacing: 0.2px; }
+    .k { color: var(--muted2); font-size: 12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+    .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; color: white; font-weight: 850; }
+    .green { background: var(--green); }
+    .amber { background: var(--amber); }
+    .red { background: var(--red); }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; padding: 10px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted2); font-size: 12px; font-weight: 700; }
+    td { font-size: 13px; }
+
+    .summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 12px;
+      margin-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .bigScore {
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: 0.2px;
+      line-height: 1;
+    }
+
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .foot {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .keyTable { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .keyTable td, .keyTable th { padding: 9px 6px; border-bottom: 1px solid var(--border); }
+    .keyTable th { color: var(--muted2); font-size: 12px; font-weight: 750; }
+
+    details { margin-top: 10px; }
+    summary { cursor: pointer; color: var(--text); font-weight: 750; }
+
+    @media (max-width: 900px) {
+      .columns { grid-template-columns: 1fr; }
+      .col { min-height: auto; }
+      input { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>2-Stock RAG Screener</h1>
+      <div class="muted small">Alpha Vantage fundamentals · Each column runs independently · Global throttle ≈ 1 request/second</div>
+    </div>
+    <div class="muted small">RAG thresholds + weighted score (1–100) at the bottom of each card</div>
+  </header>
+
+  <div class="container">
+    <div class="columns">
+      <section class="col">
+        <div class="topbar">
+          <div class="left">
+            <div>
+              <label for="t1">Stock A</label><br />
+              <input id="t1" placeholder="e.g., TSLA" value="TSLA" />
+            </div>
+            <button id="go1">Scrape</button>
+          </div>
+        </div>
+        <div id="status1" class="status"></div>
+        <div id="out1"></div>
+      </section>
+
+      <section class="col">
+        <div class="topbar">
+          <div class="left">
+            <div>
+              <label for="t2">Stock B</label><br />
+              <input id="t2" placeholder="e.g., MSFT" value="MSFT" />
+            </div>
+            <button id="go2">Scrape</button>
+          </div>
+        </div>
+        <div id="status2" class="status"></div>
+        <div id="out2"></div>
+      </section>
+    </div>
+
+    <div class="foot">
+      <strong>How the score works</strong>
+      <div class="muted" style="margin-top:6px;">
+        Final score is a weighted blend of the 5 key metrics (plus one extra quality check: Operating Margin TTM).
+        Weighting (out of 100): ROIC 25 · FCF margin 20 · Net debt/EBITDA 20 · Revenue CAGR 15 · PEG 10 · Operating margin 10.
+      </div>
+
+      <details>
+        <summary>Acceptable ranges (key)</summary>
+        <table class="keyTable">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Green</th>
+              <th>Amber</th>
+              <th>Red</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ROIC (approx)</td>
+              <td><span class="mono">≥ 12%</span></td>
+              <td><span class="mono">8–12%</span></td>
+              <td><span class="mono">&lt; 8%</span></td>
+              <td>Quality + capital efficiency (approx from filings)</td>
+            </tr>
+            <tr>
+              <td>FCF margin (TTM)</td>
+              <td><span class="mono">≥ 8%</span></td>
+              <td><span class="mono">3–8%</span></td>
+              <td><span class="mono">&lt; 3%</span></td>
+              <td>Cash generation relative to sales</td>
+            </tr>
+            <tr>
+              <td>Net debt / EBITDA (TTM)</td>
+              <td><span class="mono">≤ 2.0×</span></td>
+              <td><span class="mono">2.0–3.0×</span></td>
+              <td><span class="mono">&gt; 3.0×</span></td>
+              <td>Balance-sheet risk (lower is better; negative can be net cash)</td>
+            </tr>
+            <tr>
+              <td>Revenue CAGR (3Y)</td>
+              <td><span class="mono">≥ 8%</span></td>
+              <td><span class="mono">4–8%</span></td>
+              <td><span class="mono">&lt; 4%</span></td>
+              <td>Durable growth (3-year annual revenue trend)</td>
+            </tr>
+            <tr>
+              <td>PEG</td>
+              <td><span class="mono">≤ 1.5</span></td>
+              <td><span class="mono">1.5–2.0</span></td>
+              <td><span class="mono">&gt; 2.0</span></td>
+              <td>Valuation vs growth (from Alpha Vantage Overview)</td>
+            </tr>
+            <tr>
+              <td>Operating margin (TTM)</td>
+              <td><span class="mono">≥ 15%</span></td>
+              <td><span class="mono">8–15%</span></td>
+              <td><span class="mono">&lt; 8%</span></td>
+              <td>Extra quality check (EBIT / revenue TTM)</td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
+
+      <div class="muted small" style="margin-top:10px;">
+        Notes: ROIC here is an approximation (NOPAT / Invested Capital). If Alpha Vantage is missing specific line items, the metric will show N/A and the score will down-weight it automatically.
+      </div>
+    </div>
+  </div>
+
+<script>
+const API_KEY = "ZMIXYXAQEYNHFFTG";
+const BASE = "https://www.alphavantage.co/query";
+
+// RAG thresholds (used for labels)
+const THRESHOLDS = {
+  roic: { green: 12, amber: 8 },
+  fcfMargin: { green: 8, amber: 3 },
+  netDebtEbitda: { green: 2, amber: 3 },
+  revCagr: { green: 8, amber: 4 },
+  peg: { green: 1.5, amber: 2.0 },
+  opMargin: { green: 15, amber: 8 }
+};
+
+// Weighted score out of 100 (must sum to 100)
+const WEIGHTS = {
+  roic: 25,
+  fcfMargin: 20,
+  netDebtEbitda: 20,
+  revCagr3y: 15,
+  peg: 10,
+  opMargin: 10
+};
+
+// Global throttling: ~1 request / second
+let lastCallAt = 0;
+const MIN_GAP_MS = 1100;
+
+// Local cache to reduce API calls
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+const $ = (id) => document.getElementById(id);
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+function fmtNum(x, d=2){ if(x==null||!isFinite(x))return "N/A"; return Number(x).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtMoney(x){ if(x==null||!isFinite(x))return "N/A"; const n=Math.abs(x); const s=x<0?"-":""; if(n>=1e12)return s+(n/1e12).toFixed(2)+"T"; if(n>=1e9)return s+(n/1e9).toFixed(2)+"B"; if(n>=1e6)return s+(n/1e6).toFixed(2)+"M"; return s+n.toFixed(0); }
+function parseAV(v){ if(v==null)return null; const n=Number(v); return isFinite(n)?n:null; }
+function clamp(x, a, b){ return Math.max(a, Math.min(b, x)); }
+
+function ragHigher(v,t){ if(v==null)return{cls:"amber",label:"N/A"}; if(v>=t.green)return{cls:"green",label:"Green"}; if(v>=t.amber)return{cls:"amber",label:"Amber"}; return{cls:"red",label:"Red"}; }
+function ragLower(v,t){ if(v==null)return{cls:"amber",label:"N/A"}; if(v<=t.green)return{cls:"green",label:"Green"}; if(v<=t.amber)return{cls:"amber",label:"Amber"}; return{cls:"red",label:"Red"}; }
+
+function ckey(fn,s){ return `av_cache_v1:${fn}:${s}`; }
+function readCache(fn,s){
+  try{
+    const r=localStorage.getItem(ckey(fn,s));
+    if(!r)return null;
+    const o=JSON.parse(r);
+    if(!o?.savedAt || !o?.data) return null;
+    if(Date.now()-o.savedAt>CACHE_TTL_MS)return null;
+    return o.data;
+  }catch{return null;}
+}
+function writeCache(fn,s,d){ try{ localStorage.setItem(ckey(fn,s),JSON.stringify({savedAt:Date.now(),data:d})); }catch{} }
+
+async function throttled(url){
+  const w=Math.max(0,(lastCallAt+MIN_GAP_MS)-Date.now());
+  if(w) await sleep(w);
+  lastCallAt=Date.now();
+
+  const r=await fetch(url);
+  const j=await r.json();
+  if(j.Note||j.Information||j.Error_Message) throw new Error(j.Note||j.Information||j.Error_Message);
+  return j;
+}
+
+function avUrl(fn,s){
+  const u=new URL(BASE);
+  u.searchParams.set("function",fn);
+  u.searchParams.set("symbol",s);
+  u.searchParams.set("apikey",API_KEY);
+  return u.toString();
+}
+
+async function getAV(fn,s, statusEl){
+  const c=readCache(fn,s);
+  if(c) return c;
+  if(statusEl) statusEl.textContent = `Fetching ${fn}…`;
+  const d=await throttled(avUrl(fn,s));
+  writeCache(fn,s,d);
+  return d;
+}
+
+async function fetchPack(symbol, statusEl){
+  const s = symbol.toUpperCase().trim();
+  const overview = await getAV("OVERVIEW", s, statusEl);
+  const income   = await getAV("INCOME_STATEMENT", s, statusEl);
+  const balance  = await getAV("BALANCE_SHEET", s, statusEl);
+  const cash     = await getAV("CASH_FLOW", s, statusEl);
+  return { symbol: s, overview, income, balance, cash };
+}
+
+function sumQ(arr,f,n=4){
+  if(!arr||!arr.length) return null;
+  let s=0,k=0;
+  for(const r of arr.slice(0,n)){
+    const v=parseAV(r?.[f]);
+    if(v!=null){ s+=v; k++; }
+  }
+  return k? s : null;
+}
+function annual(arr,f){ return arr?.[0]? parseAV(arr[0][f]) : null; }
+
+function revCagr3Y(income){
+  const a=income?.annualReports;
+  if(!a||a.length<4) return null;
+  const r0=parseAV(a[0].totalRevenue), r3=parseAV(a[3].totalRevenue);
+  if(r0==null||r3==null||r3<=0) return null;
+  return (Math.pow(r0/r3,1/3)-1)*100;
+}
+
+function effTax(income){
+  const a=income?.annualReports;
+  if(!a||!a.length) return 0.21;
+  const t=parseAV(a[0].incomeTaxExpense), p=parseAV(a[0].incomeBeforeTax);
+  if(t==null||p==null||p===0) return 0.21;
+  return clamp(t/p, 0, 0.35);
+}
+
+function totalDebt(bs){
+  const v = parseAV(bs?.shortLongTermDebtTotal);
+  if(v!=null) return v;
+  return ((parseAV(bs?.longTermDebt)||0) + (parseAV(bs?.shortTermDebt)||0));
+}
+
+function calc(pack){
+  const qI=pack.income?.quarterlyReports||[];
+  const qB=pack.balance?.quarterlyReports||[];
+  const qC=pack.cash?.quarterlyReports||[];
+
+  const revenueTTM = sumQ(qI,"totalRevenue");
+  const ebitdaTTM  = sumQ(qI,"ebitda") ?? annual(pack.income?.annualReports,"ebitda");
+  const ebitTTM    = sumQ(qI,"operatingIncome") ?? annual(pack.income?.annualReports,"operatingIncome");
+
+  const opMargin = (ebitTTM!=null && revenueTTM!=null && revenueTTM!==0) ? (ebitTTM / revenueTTM) * 100 : null;
+
+  const bs = qB[0] || pack.balance?.annualReports?.[0] || {};
+  const cash = parseAV(bs?.cashAndCashEquivalentsAtCarryingValue) ?? parseAV(bs?.cashAndShortTermInvestments);
+  const debt = totalDebt(bs);
+  const equity = parseAV(bs?.totalShareholderEquity) ?? parseAV(bs?.totalStockholderEquity);
+
+  const netDebt  = (debt!=null && cash!=null) ? (debt - cash) : null;
+  const netDebtE = (netDebt!=null && ebitdaTTM!=null && ebitdaTTM!==0) ? (netDebt/ebitdaTTM) : null;
+
+  const ocf = sumQ(qC,"operatingCashflow") ?? annual(pack.cash?.annualReports,"operatingCashflow");
+  const capex = sumQ(qC,"capitalExpenditures") ?? annual(pack.cash?.annualReports,"capitalExpenditures");
+  const fcf = (ocf!=null && capex!=null) ? (ocf - capex) : null;
+  const fcfMargin = (fcf!=null && revenueTTM!=null && revenueTTM!==0) ? (fcf/revenueTTM)*100 : null;
+
+  const tax = effTax(pack.income);
+  const nopat = (ebitTTM!=null) ? (ebitTTM*(1-tax)) : null;
+  const invested = (equity!=null && debt!=null && cash!=null) ? (equity + debt - cash) : null;
+  const roic = (nopat!=null && invested!=null && invested!==0) ? (nopat/invested)*100 : null;
+
+  const peg = parseAV(pack.overview?.PEGRatio);
+
+  return {
+    symbol: pack.symbol,
+    name: pack.overview?.Name || pack.symbol,
+    sector: pack.overview?.Sector || "—",
+    marketCap: parseAV(pack.overview?.MarketCapitalization),
+    roic,
+    fcfMargin,
+    netDebtE,
+    revCagr3y: revCagr3Y(pack.income),
+    peg,
+    opMargin,
+    fcf
+  };
+}
+
+// --- Scoring ---
+// Converts a metric value into a 0..100 score using a piecewise-linear scale.
+// If value is null, returns null.
+function scoreHigherBetter(v, amber, green, cap=2.0){
+  // red at 0, amber at amber, green at green, cap at green*cap
+  if(v==null || !isFinite(v)) return null;
+  if(v <= 0) return 0;
+  if(v < amber) return (v/amber) * 50;
+  if(v < green) return 50 + ((v-amber)/(green-amber)) * 30; // 50..80
+  const top = green*cap;
+  if(v < top) return 80 + ((v-green)/(top-green)) * 20; // 80..100
+  return 100;
+}
+
+function scoreLowerBetter(v, green, amber, bad=6.0){
+  // green at green, amber at amber, red at bad
+  if(v==null || !isFinite(v)) return null;
+  // net cash (negative) is best
+  if(v <= 0) return 100;
+  if(v <= green) return 100;
+  if(v < amber) return 80 - ((v-green)/(amber-green)) * 30; // 80..50
+  if(v < bad) return 50 - ((v-amber)/(bad-amber)) * 50; // 50..0
+  return 0;
+}
+
+function weightedFinalScore(m){
+  const parts = {
+    roic: scoreHigherBetter(m.roic, THRESHOLDS.roic.amber, THRESHOLDS.roic.green, 2.0),
+    fcfMargin: scoreHigherBetter(m.fcfMargin, THRESHOLDS.fcfMargin.amber, THRESHOLDS.fcfMargin.green, 2.5),
+    netDebtEbitda: scoreLowerBetter(m.netDebtE, THRESHOLDS.netDebtEbitda.green, THRESHOLDS.netDebtEbitda.amber, 6.0),
+    revCagr3y: scoreHigherBetter(m.revCagr3y, THRESHOLDS.revCagr.amber, THRESHOLDS.revCagr.green, 3.0),
+    peg: scoreLowerBetter(m.peg, THRESHOLDS.peg.green, THRESHOLDS.peg.amber, 4.0),
+    opMargin: scoreHigherBetter(m.opMargin, THRESHOLDS.opMargin.amber, THRESHOLDS.opMargin.green, 2.0)
+  };
+
+  // If some metrics are missing, re-normalize weights over available metrics
+  let wSum = 0;
+  let total = 0;
+  for(const [k, w] of Object.entries(WEIGHTS)){
+    const s = parts[k];
+    if(s==null) continue;
+    wSum += w;
+    total += (s * w);
+  }
+  if(wSum === 0) return { score: null, parts };
+  const final = total / wSum;
+  return { score: clamp(final, 0, 100), parts };
+}
+
+function ragForMetric(name, m){
+  switch(name){
+    case "roic": return ragHigher(m.roic, THRESHOLDS.roic);
+    case "fcfMargin": return ragHigher(m.fcfMargin, THRESHOLDS.fcfMargin);
+    case "netDebtE": return ragLower(m.netDebtE, THRESHOLDS.netDebtEbitda);
+    case "revCagr3y": return ragHigher(m.revCagr3y, THRESHOLDS.revCagr);
+    case "peg": return ragLower(m.peg, THRESHOLDS.peg);
+    case "opMargin": return ragHigher(m.opMargin, THRESHOLDS.opMargin);
+    default: return { cls: "amber", label: "N/A" };
+  }
+}
+
+function badgeForScore(s){
+  if(s==null) return { cls: "amber", label: "N/A" };
+  if(s >= 75) return { cls: "green", label: "STRONG" };
+  if(s >= 55) return { cls: "amber", label: "OK" };
+  return { cls: "red", label: "WEAK" };
+}
+
+function card(m){
+  const final = weightedFinalScore(m);
+  const finalBadge = badgeForScore(final.score);
+
+  const row=(n,v,r)=>`<tr><td>${n}</td><td class="mono">${v}</td><td><span class="badge ${r.cls}">${r.label}</span></td></tr>`;
+
+  const roicR = ragForMetric("roic", m);
+  const fcfMR = ragForMetric("fcfMargin", m);
+  const ndeR  = ragForMetric("netDebtE", m);
+  const cagrR = ragForMetric("revCagr3y", m);
+  const pegR  = ragForMetric("peg", m);
+  const opmR  = ragForMetric("opMargin", m);
+
+  return `<div class="card">
+    <div class="row">
+      <div>
+        <div class="ticker">${m.symbol} <span class="k">· ${m.name}</span></div>
+        <div class="k">Sector: ${m.sector} · Mkt Cap: <span class="mono">${m.marketCap!=null?fmtMoney(m.marketCap):"N/A"}</span></div>
+      </div>
+      <div class="row" style="gap:8px;">
+        <span class="badge ${finalBadge.cls}">${finalBadge.label}</span>
+        <span class="badge ${finalBadge.cls}">${final.score!=null?Math.round(final.score):"N/A"}/100</span>
+      </div>
+    </div>
+
+    <table>
+      <thead><tr><th>Metric</th><th>Value</th><th>R/A/G</th></tr></thead>
+      <tbody>
+        ${row("ROIC (approx)", m.roic!=null?fmtNum(m.roic)+"%":"N/A", roicR)}
+        ${row("FCF margin (TTM)", m.fcfMargin!=null?fmtNum(m.fcfMargin)+"%":"N/A", fcfMR)}
+        ${row("Net debt / EBITDA (TTM)", m.netDebtE!=null?fmtNum(m.netDebtE):"N/A", ndeR)}
+        ${row("Revenue CAGR (3Y)", m.revCagr3y!=null?fmtNum(m.revCagr3y)+"%":"N/A", cagrR)}
+        ${row("PEG", m.peg!=null?fmtNum(m.peg):"N/A", pegR)}
+        ${row("Operating margin (TTM)", m.opMargin!=null?fmtNum(m.opMargin)+"%":"N/A", opmR)}
+      </tbody>
+    </table>
+
+    <div class="summary">
+      <div>
+        <div class="k">Final weighted score</div>
+        <div class="bigScore">${final.score!=null?Math.round(final.score):"N/A"}<span class="k">/100</span></div>
+      </div>
+      <div class="pill">Weights: 25/20/20/15/10/10</div>
+      <div class="k" style="text-align:right;">FCF (TTM): <span class="mono">${m.fcf!=null?fmtMoney(m.fcf):"N/A"}</span></div>
+    </div>
+  </div>`;
+}
+
+async function runSide(side){
+  const input = $(side === 1 ? "t1" : "t2");
+  const btn = $(side === 1 ? "go1" : "go2");
+  const status = $(side === 1 ? "status1" : "status2");
+  const out = $(side === 1 ? "out1" : "out2");
+
+  const ticker = input.value.trim().toUpperCase();
+  if(!ticker){ status.textContent = "Enter a ticker."; return; }
+
+  btn.disabled = true;
+  out.innerHTML = "";
+  status.textContent = "Starting…";
+
+  try{
+    const pack = await fetchPack(ticker, status);
+    status.textContent = "Calculating…";
+    const m = calc(pack);
+    out.innerHTML = card(m);
+    status.textContent = "Done.";
+  }catch(e){
+    status.textContent = "Error: " + e.message;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+$("go1").addEventListener("click", () => runSide(1));
+$("go2").addEventListener("click", () => runSide(2));
+</script>
+</body>
+</html>
